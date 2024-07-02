@@ -184,6 +184,8 @@ Candle indicators are indicators to be used with candle charts
 * McGinley Dynamic Envelopes 
 * Moving Constant Bands, generic version of Bollinger bansa 
 * Moving Constant envelopes, generic version of moving average envelopes 
+* Donchian Channels
+* Keltner Channel
 
 ### Chart Trends
 
@@ -254,6 +256,7 @@ Trend indicators show the trend of price movement
 * Long Parabolic Time Price System
 * Short Parabolic Time Price System 
 * Direcational Movement
+* Volume-Price trend
 
 ### Volatility Indicators
 

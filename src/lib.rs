@@ -105,6 +105,8 @@
 //!  constant bands
 //! * [`moving_constant_envelopes`](candle_indicators::bulk::moving_constant_envelopes) - Calculates the moving
 //!  constant envelopes
+//! * [`donchian_channels`](candle_indicators::bulk::donchian_channels)
+//! * [`keltner_channel`](candle_indicators::bulk::keltner_channel)
 //!
 //! #### Single
 //!
@@ -117,6 +119,8 @@
 //! * [`moving_constant_bands`](candle_indicators::single::moving_constant_bands) - Calculates
 //! the moving constant bands
 //! * [`moving_constant_envelopes`](candle_indicators::single::moving_constant_envelopes) - Calculates the moving
+//! * [`donchian_channels`](candle_indicators::single::donchian_channels)
+//! * [`keltner_channel`](candle_indicators::single::keltner_channel)
 //!
 //! ### Chart Trends
 //! [`chart_trends`] shows trends on charts. Unlike the other modules it has no bulk or single.
@@ -266,6 +270,7 @@
 //! * [`aroon_up`](trend_indicators::bulk::aroon_up) - Calculates the Aroon up
 //! * [`parabolic_time_price_system`](trend_indicators::bulk::parabolic_time_price_system) - Calculates
 //! the parabolic time price system
+//! * [`volume_price_trend`](trend_indicators::bulk:volume_price_trend)
 //!
 //! #### Single
 //!
@@ -277,6 +282,7 @@
 //!  Calculates the parabolic time price system for long positions
 //! * [`short_parabolic_time_price_system`](trend_indicators::single::short_parabolic_time_price_system) -
 //!  Calculates the parabolic time price system for short positions
+//! * [`volume_price_trend`](trend_indicators::single:volume_price_trend)
 //!
 //! ### Volatility Indicators
 //!

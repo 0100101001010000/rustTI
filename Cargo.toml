@@ -1,6 +1,6 @@
 [package]
 name = "rust_ti"
-version = "1.1.0"
+version = "1.2.0"
 edition = "2021"
 authors = ["0100101001010000"]
 description = "An advanced and configurable technical indicators library with over 50 unique indicators for stock  market technical analysis"

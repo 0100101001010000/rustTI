@@ -25,10 +25,18 @@ would be very helpful.
 
 ### New indicators
 
-    * Go over Welles book 
-    * Check other sources (such as investopedia, TI books...) for any other common indicators 
-that may have been missed
-    * Indicators derived from bbands
+    * Supertrend Indicator: https://www.investopedia.com/supertrend-indicator-7976167
+    * Relative Vigor Index: https://www.investopedia.com/terms/r/relative_vigor_index.asp
+    * Percentage Price Oscillator: https://www.investopedia.com/terms/p/ppo.asp
+    * Chande Momentum Oscillator: https://www.investopedia.com/terms/c/chandemomentumoscillator.asp
+    * Polarized Fractal Efficiency: https://www.investopedia.com/terms/p/pfe.asp
+    * Internal Bar Strength: https://www.quantifiedstrategies.com/internal-bar-strength-ibs-indicator-strategy/
+    * True strength index: https://en.wikipedia.org/wiki/True_strength_index
+    * Fisher Transform Indicator: https://www.investopedia.com/terms/f/fisher-transform.asp
+    * Positive Volume Index: https://www.investopedia.com/terms/p/pvi.asp
+    * Negative Volume Index: https://www.investopedia.com/terms/n/nvi.asp
+    * McGinley ATR
+    * positivity index, see s&P spreadsheet
 
 ## I have an indicator I want to add
 

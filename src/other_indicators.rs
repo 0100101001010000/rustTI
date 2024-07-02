@@ -17,7 +17,7 @@
 /// `single` module holds functions that return a singular values
 pub mod single {
     use crate::basic_indicators::single::{median, mode};
-    use crate::moving_average::single::{mcginley_dynamic, moving_average};
+    use crate::moving_average::single::moving_average;
     use crate::other_indicators::bulk;
     use crate::{ConstantModelType, MovingAverageType};
 

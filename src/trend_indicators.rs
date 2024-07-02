@@ -13,6 +13,7 @@
 //! * [`directional_movement`](bulk::directional_movement) - Calculates Welles positive/negative
 //! Directional Index, Directional Movement, Directional Movement Index, Average Directional
 //! Movement Index, Average Directional Movement Index Rating.
+//! * [`volume_price_trend`](bulk::volume_price_trend)
 //!
 //! ## Single
 //!
@@ -24,6 +25,7 @@
 //! time price system for long positions
 //! * [`short_parabolic_time_price_system`](single::short_parabolic_time_price_system) - Calculates the
 //! parabolic time price system for short positions
+//! * [`volume_price_trend`](single::volume_price_trend)
 
 /// `single` module holds functions that return a singular values
 pub mod single {
@@ -264,6 +266,55 @@ pub mod single {
             return *high;
         };
         return sar;
+    }
+
+    /// The `volume_price_trend` relates prices to the volume to give an indicator that tracks the
+    /// trend of an asset with relation to volume.
+    ///
+    /// A signal line is some times created by taking the moving average of the Volume-Price trend.
+    ///
+    /// The standard is to use the close prices.
+    ///
+    /// If there is no previous volume-price trend use 0.0.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_price` - Price at t
+    /// * `previous_price` - Price at t-1
+    /// * `volume` - Volume at t
+    /// * `previous_volume_price_trend` - Previous volume-price trend. If none use 0.0
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// let current_price = 102.0;
+    /// let previous_price = 101.0;
+    /// let volume = 1000.0;
+    /// let volume_price_trend = rust_ti::trend_indicators::single::volume_price_trend(
+    ///     &current_price,
+    ///     &previous_price,
+    ///     &volume,
+    ///     &0.0
+    /// );
+    /// assert_eq!(9.900990099009901, volume_price_trend);
+    ///
+    /// let next_price = 100.0;
+    /// let next_volume = 1500.0;
+    /// let volume_price_trend = rust_ti::trend_indicators::single::volume_price_trend(
+    ///     &next_price,
+    ///     &current_price,
+    ///     &next_volume,
+    ///     &volume_price_trend
+    /// );
+    /// assert_eq!(-19.510774606872452, volume_price_trend);
+    /// ```
+    pub fn volume_price_trend(
+        current_price: &f64, 
+        previous_price: &f64, 
+        volume: &f64,
+        previous_volume_price_trend: &f64
+    ) -> f64 {
+        return previous_volume_price_trend + ( volume * ((current_price - previous_price) / previous_price))
     }
 }
 
@@ -862,6 +913,81 @@ pub mod bulk {
             );
         };
         return directional_movement_system
+    }
+
+    /// The `volume_price_trend` relates prices to the volume to give an indicator that tracks the
+    /// trend of an asset with relation to volume.
+    ///
+    /// A signal line is some times created by taking the moving average of the Volume-Price trend.
+    ///
+    /// The standard is to use the close prices.
+    ///
+    /// If there is no previous volume-price trend use 0.0.
+    ///
+    /// In the bulk function length of volume should be 1 shorter than length of prices as the
+    /// function does the difference between the prices at t and t-1, but only uses volume for t.
+    ///
+    /// # Arguments
+    ///
+    /// * `prices` - Slice of prices
+    /// * `volumes` - Slice of volumes
+    /// * `previous_volume_price_trend` - Previous volume-price trend. If none use 0.0
+    ///
+    /// # Panics
+    ///
+    /// `volume_price_trend` will panic if length of `volumes` isn't equal to length of `prices` -
+    /// 1.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// let prices = [101.0, 102.0, 100.0];
+    /// let volumes = [1000.0, 1500.0];
+    ///
+    /// let volume_price_trend = rust_ti::trend_indicators::bulk::volume_price_trend(
+    ///     &prices,
+    ///     &volumes,
+    ///     &0.0
+    /// );
+    /// assert_eq!(vec![9.900990099009901, -19.510774606872452], volume_price_trend);
+    ///
+    /// let next_prices = [100.0, 98.0, 97.0];
+    /// let next_volumes = [2000.0, 800.0];
+    /// let volume_price_trend = rust_ti::trend_indicators::bulk::volume_price_trend(
+    ///     &next_prices,
+    ///     &next_volumes,
+    ///     &volume_price_trend[1]
+    /// );
+    /// assert_eq!(vec![-59.51077460687245, -67.6740399129949], volume_price_trend);
+    /// ```
+    pub fn volume_price_trend(
+        prices: &[f64], 
+        volumes: &[f64],
+        previous_volume_price_trend: &f64
+    ) -> Vec<f64> {
+        let length = volumes.len();
+        if length != prices.len() - 1 {
+            panic!("Length of volumes ({}) must equal length of prices ({}) - 1", length, prices.len())
+        };
+        
+        if volumes.is_empty() || prices.is_empty() {
+            panic!("Volumes nor prices can be empty")
+        };
+
+        let mut vpts = vec![single::volume_price_trend(
+            &prices[1], &prices[0], &volumes[0], previous_volume_price_trend
+        )];
+
+        for i in 1..length {
+            vpts.push(single::volume_price_trend(
+                    &prices[i+1],
+                    &prices[i],
+                    &volumes[i],
+                    &vpts[i-1]
+                )
+            );
+        };
+        return vpts;
     }
 }
 
@@ -1535,6 +1661,96 @@ mod tests {
             &close,
             &3_usize,
             &crate::ConstantModelType::SimpleMovingMode
+        );
+    }
+
+    #[test]
+    fn single_volume_price_trend_no_previous() {
+        assert_eq!(
+            -11.379612133266974,
+            single::volume_price_trend(
+                &99.01,
+                &100.55,
+                &743.0,
+                &0.0
+            )
+        );
+    }
+
+    #[test]
+    fn single_volume_price_trend_previous() {
+        assert_eq!(
+            4.023680463440446,
+            single::volume_price_trend(
+                &100.43,
+                &99.01,
+                &1074.0,
+                &-11.379612133266974
+            )
+        );
+    }
+
+    #[test]
+    fn bulk_volume_price_trend_no_previous() {
+        let prices = vec![100.55, 99.01, 100.43, 101.0, 101.76];
+        let volume = vec![743.0, 1074.0, 861.0, 966.0];
+        assert_eq!(
+            vec![-11.379612133266974, 4.023680463440446, 8.910367708287545, 16.1792785993767],
+            bulk::volume_price_trend(
+                &prices,
+                &volume,
+                &0.0
+            )
+        );
+    }
+
+    #[test]
+    fn bulk_volume_price_trend_previous() {
+        let prices = vec![100.55, 99.01, 100.43, 101.0, 101.76];
+        let volume = vec![743.0, 1074.0, 861.0, 966.0];
+        assert_eq!(
+            vec![-1.3796121332669742, 14.023680463440446, 18.910367708287545, 26.1792785993767],
+            bulk::volume_price_trend(
+                &prices,
+                &volume,
+                &10.0
+            )
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn bulk_volume_price_trend_panic_length() {
+        let prices = vec![100.55, 99.01, 101.0, 101.76];
+        let volume = vec![743.0, 1074.0, 861.0, 966.0];
+        bulk::volume_price_trend(
+                &prices,
+                &volume,
+                &10.0
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn bulk_volume_price_trend_panic_volume_empty() {
+        let prices = vec![100.55, 99.01, 100.43, 101.0, 101.76];
+        let volume = Vec::new();
+        bulk::volume_price_trend(
+                &prices,
+                &volume,
+                &10.0
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn bulk_volume_price_trend_panic_prices_empty() {
+        let prices = Vec::new();
+        let volume = vec![743.0, 1074.0, 861.0, 966.0];
+        bulk::volume_price_trend(
+                &prices,
+                &volume,
+                &10.0
         );
     }
 }

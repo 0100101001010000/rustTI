@@ -12,6 +12,8 @@
 //! * [`moving_constant_bands`](bulk::moving_constant_bands) - Calculates the moving constant bands
 //! * [`moving_constant_envelopes`](bulk::moving_constant_envelopes) - Calculates the moving
 //! constant envelopes
+//! * [`donchian_channels`](bulk::donchian_channels)
+//! * [`keltner_channel`](bulk::keltner_channel)
 //!
 //! ## Single
 //!
@@ -23,6 +25,8 @@
 //! * [`moving_constant_bands`](single::moving_constant_bands) - Calculates the moving constant bands
 //! * [`moving_constant_envelopes`](single::moving_constant_envelopes) - Calculates the moving
 //! constant envelopes
+//! * [`donchian_channels`](single::donchian_channels)
+//! * [`keltner_channel`](single::keltner_channel)
 
 /// `single` module holds functions that return a singular values
 pub mod single {
@@ -32,6 +36,7 @@ pub mod single {
     use crate::moving_average::single::{mcginley_dynamic, moving_average};
     use crate::volatility_indicators::single::ulcer_index;
     use crate::{ConstantModelType, DeviationModel, MovingAverageType};
+    use crate::other_indicators::single::average_true_range;
     /// The `moving_constant_envelopes` function calculates upper and lower bands from the
     /// moving constant of the price. The function returns a tuple with the lower band,
     /// moving constant, upper band (in that order).
@@ -390,6 +395,136 @@ pub mod single {
             close[length - base_period],
         );
     }
+
+    /// The `donchian_channels` produces bands from the period highs and lows.
+    ///
+    /// It returns a tuple of the lower band, the middle band, and the upper band.
+    ///
+    /// # Arguments
+    ///
+    /// * `high` - Slice of highs
+    /// * `low` - Slow of lows
+    ///
+    /// # Panics
+    ///
+    /// `donchian_channels` will panic if:
+    ///     * lengths of `high` and `low` aren't equal
+    ///     * `high` or `low` is empty
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// let highs = vec![105.0, 103.0, 107.0, 101.0, 103.0];
+    /// let lows = vec![97.0, 99.0, 98.0, 100.0, 95.0];
+    ///
+    /// let donchian_channels = rust_ti::candle_indicators::single::donchian_channels(
+    ///     &highs,
+    ///     &lows
+    /// );
+    ///
+    /// assert_eq!((95.0, 101.0 ,107.0), donchian_channels);
+    /// ```
+    pub fn donchian_channels(high: &[f64], low: &[f64]) -> (f64, f64, f64) {
+        if high.len() != low.len() {
+            panic!("High ({}) must be of same length as low ({})", high.len(), low.len())
+        };
+        if high.is_empty() {
+            panic!("Prices cannot be empty")
+        };
+        let max_price = max(high);
+        let min_price = min(low);
+        return (min_price, (max_price + min_price) / 2.0, max_price)
+    }
+
+    /// The `keltner_channel` produces bands based on the moving average of prices for
+    /// a period and multiplies it by the average true range.
+    ///
+    /// The standard Keltner Channel uses an exponential moving average and multiplier of 2.
+    ///
+    /// The function returns a tuple of the lower band, the middle band, and the upper band.
+    ///
+    /// # Arguments
+    ///
+    /// * `high` - Slice of highs
+    /// * `low` - Slice of lows
+    /// * `close` - Slice of previous closing prices. The need to be the closing prices for t-n to
+    /// t-1, it cannot be the close from the same day of the high and low.
+    /// * `constant_type_model` - Variant of [`ConstantModelType`] for the function
+    /// * `atr_constant_type_model` - Variant of [`ConstantModelType`] for the ATR
+    /// * `multiplier` - Multiplier for the ATR
+    ///
+    /// # Panics
+    /// 
+    /// `keltner_channel` will panic if:
+    ///     * Lengths of `high`, `low`, and `close` aren't equal
+    ///     * `high`, `low`, or `close` are empty
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// let highs = vec![105.0, 103.0, 107.0, 101.0, 105.0];
+    /// let lows = vec![97.0, 99.0, 98.0, 97.0, 95.0];
+    /// let close = vec![101.0, 102.0, 100.0, 99.0, 104.0];
+    ///
+    /// let keltner_channel = rust_ti::candle_indicators::single::keltner_channel(
+    ///     &highs,
+    ///     &lows,
+    ///     &close,
+    ///     &rust_ti::ConstantModelType::ExponentialMovingAverage,
+    ///     &rust_ti::ConstantModelType::SimpleMovingAverage,
+    ///     &2.0
+    /// );
+    ///
+    /// assert_eq!((86.76777251184836, 100.76777251184836, 114.76777251184836), keltner_channel);
+    /// ```
+    pub fn keltner_channel(
+        high: &[f64],
+        low: &[f64],
+        close: &[f64],
+        constant_model_type: &ConstantModelType,
+        atr_constant_model_type: &ConstantModelType,
+        multiplier: &f64
+    ) -> (f64, f64, f64) {
+        let length = high.len();
+        if length != low.len() || length != close.len() {
+            panic!(
+                "Length of high ({}), low ({}), and close ({}) must be equal",
+                length, low.len(), close.len()
+            )
+        };
+        if high.is_empty() {
+            panic!("Prices cannot be empty")
+        };
+
+        let atr = average_true_range(&close, &high, &low, atr_constant_model_type);
+        let mut prices = Vec::new();
+        for i in 0..length {
+            prices.push((high[i]+low[i]+close[i])/3.0);
+        };
+
+        let mc = match constant_model_type {
+            ConstantModelType::SimpleMovingAverage => {
+                moving_average(&prices, &MovingAverageType::Simple)
+            }
+            ConstantModelType::SmoothedMovingAverage => {
+                moving_average(&prices, &MovingAverageType::Smoothed)
+            }
+            ConstantModelType::ExponentialMovingAverage => {
+                moving_average(&prices, &MovingAverageType::Exponential)
+            }
+            ConstantModelType::PersonalisedMovingAverage(alpha_nominator, alpha_denominator) => {
+                moving_average(
+                    &prices,
+                    &MovingAverageType::Personalised(alpha_nominator, alpha_denominator),
+                )
+            }
+            ConstantModelType::SimpleMovingMedian => median(&prices),
+            ConstantModelType::SimpleMovingMode => mode(&prices),
+            _ => panic!("Unsupported ConstantModelType"),
+        };
+        let constant = atr * multiplier;
+        return (mc - constant, mc, mc + constant)
+    }
 }
 
 /// `bulk` holds functions that return multiple values
@@ -731,6 +866,146 @@ pub mod bulk {
             ));
         }
         return ichimoku_clouds;
+    }
+
+    /// The `donchian_channels` produces bands from the period high and low.
+    ///
+    /// It returns a vector with tuples of the lower band, the middle band, and the upper band.
+    ///
+    /// # Arguments
+    ///
+    /// * `high` - Slice of highs
+    /// * `low` - Slow of lows
+    /// * `period` - Period over which to calculate the Donchian channels
+    ///
+    /// # Panics
+    ///
+    /// `donchian_channels` will panic if:
+    ///     * lengths of `high` and `low` aren't equal
+    ///     * `high` or `low` is empty
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// let highs = vec![105.0, 103.0, 107.0, 101.0, 103.0, 100.0, 109.0, 105.0];
+    /// let lows = vec![97.0, 99.0, 98.0, 100.0, 95.0, 98.0, 99.0, 100.0];
+    /// let period: usize = 5;
+    ///
+    /// let donchian_channels = rust_ti::candle_indicators::bulk::donchian_channels(
+    ///     &highs,
+    ///     &lows,
+    ///     &period
+    /// );
+    ///
+    /// assert_eq!(vec![
+    ///         (95.0, 101.0, 107.0), (95.0, 101.0, 107.0), (95.0, 102.0, 109.0), (95.0, 102.0, 109.0)
+    ///     ], donchian_channels);
+    /// ```
+    pub fn donchian_channels(high: &[f64], low: &[f64], period: &usize) -> Vec<(f64, f64, f64)> {
+        let length = high.len();
+        if length != low.len() {
+            panic!("High ({}) must be of same length as low ({})", length, low.len())
+        };
+        if high.is_empty() {
+            panic!("Prices cannot be empty")
+        };
+        if period > &length {
+            panic!("Period ({}) must be less than or equal to length of price ({})", period, length)
+        };
+        let mut dcs = Vec::new();
+        let loop_max = length - period + 1;
+        for i in 0..loop_max {
+            dcs.push(single::donchian_channels(&high[i..i+period], &low[i..i+period]));
+        };
+        return dcs;
+    }
+
+    /// The `keltner_channel` produces bands based on the moving average of prices for
+    /// a period and multiplies it by the average true range.
+    ///
+    /// The standard Keltner Channel uses an exponential moving average and multiplier of 2.
+    ///
+    /// The function returns a tuple of the lower band, the middle band, and the upper band.
+    ///
+    /// # Arguments
+    ///
+    /// * `high` - Slice of highs
+    /// * `low` - Slice of lows
+    /// * `close` - Slice of previous closing prices. The need to be the closing prices for t-n to
+    /// t-1, it cannot be the close from the same day of the high and low.
+    /// * `constant_type_model` - Variant of [`ConstantModelType`] for the function
+    /// * `atr_constant_type_model` - Variant of [`ConstantModelType`] for the ATR
+    /// * `multiplier` - Multiplier for the ATR
+    /// * `period` - Period over which to calculate the Keltner Channel
+    ///
+    /// # Panics
+    /// 
+    /// `keltner_channel` will panic if:
+    ///     * Lengths of `high`, `low`, and `close` aren't equal
+    ///     * `high`, `low`, or `close` are empty
+    ///     * If `period` is greater than lengths
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// let highs = vec![105.0, 103.0, 107.0, 101.0, 105.0, 109.0, 111.0];
+    /// let lows = vec![97.0, 99.0, 98.0, 97.0, 95.0, 102.0, 106.0];
+    /// let close = vec![101.0, 102.0, 100.0, 99.0, 104.0, 107.0, 108.0];
+    /// let period: usize = 5;
+    ///
+    /// let keltner_channel = rust_ti::candle_indicators::bulk::keltner_channel(
+    ///     &highs,
+    ///     &lows,
+    ///     &close,
+    ///     &rust_ti::ConstantModelType::ExponentialMovingAverage,
+    ///     &rust_ti::ConstantModelType::SimpleMovingAverage,
+    ///     &2.0,
+    ///     &period
+    /// );
+    ///
+    /// assert_eq!(
+    ///     vec![
+    ///         (86.76777251184836, 100.76777251184836, 114.76777251184836), 
+    ///         (89.16461295418642, 102.76461295418642, 116.36461295418641),
+    ///         (90.9747235387046, 104.9747235387046, 118.9747235387046)
+    ///     ], keltner_channel);
+    /// ```
+    pub fn keltner_channel(
+        high: &[f64],
+        low: &[f64],
+        close: &[f64],
+        constant_model_type: &crate::ConstantModelType,
+        atr_constant_model_type: &crate::ConstantModelType,
+        multiplier: &f64,
+        period: &usize
+    ) -> Vec<(f64, f64, f64)> {
+        let length = high.len();
+        if length != low.len() || length != close.len() {
+            panic!(
+                "Length of high ({}), low ({}), and close ({}) must be equal",
+                length, low.len(), close.len()
+            )
+        };
+        if high.is_empty() {
+            panic!("Prices cannot be empty")
+        };
+        if period > &length {
+            panic!("Period ({}) cannot be greater than length of prices ({})", period, length)
+        };
+
+        let mut kcs = Vec::new();
+        let loop_max = length - period + 1;
+        for i in 0..loop_max {
+            kcs.push(single::keltner_channel(
+                    &high[i..i+period],
+                    &low[i..i+period],
+                    &close[i..i+period],
+                    constant_model_type,
+                    atr_constant_model_type,
+                    multiplier
+            ));
+        };
+        return kcs
     }
 }
 
@@ -1383,5 +1658,329 @@ mod tests {
         let lows = vec![100.08, 98.75, 100.14, 98.98, 99.07, 100.1, 99.96];
         let close = vec![100.46, 100.53, 100.38, 100.19, 100.21, 100.32, 100.28];
         bulk::ichimoku_cloud(&highs, &lows, &close, &3_usize, &5_usize, &70_usize);
+    }
+
+    #[test]
+    fn single_donchian_channel() {
+        let highs = vec![101.26, 102.57, 102.32, 100.69, 100.83];
+        let lows = vec![100.08, 98.75, 100.14, 98.98, 99.07];
+        assert_eq!((98.75, 100.66, 102.57), single::donchian_channels(&highs, &lows));
+    }
+
+    #[test]
+    #[should_panic]
+    fn single_donchian_channel_length_panic() {
+        let highs = vec![101.26, 102.57, 100.69, 100.83];
+        let lows = vec![100.08, 98.75, 100.14, 98.98, 99.07];
+        single::donchian_channels(&highs, &lows);
+    }
+
+    #[test]
+    #[should_panic]
+    fn single_donchian_channel_empty_panic() {
+        let highs = Vec::new();
+        let lows = Vec::new();
+        single::donchian_channels(&highs, &lows);
+    }
+
+    #[test]
+    fn bulk_donchian_channels() {
+        let highs = vec![101.26, 102.57, 102.32, 100.69, 100.83, 101.73, 102.01];
+        let lows = vec![100.08, 98.75, 100.14, 98.98, 99.07, 100.1, 99.96];
+        assert_eq!(
+            vec![
+                (98.75, 100.66, 102.57), (98.75, 100.66, 102.57), (98.98, 100.65, 102.32)
+            ], bulk::donchian_channels(&highs, &lows, &5_usize)
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn bulk_donchian_channels_panic_length() {
+        let highs = vec![101.26, 102.57, 100.69, 100.83, 101.73, 102.01];
+        let lows = vec![100.08, 98.75, 100.14, 98.98, 99.07, 100.1, 99.96];
+        bulk::donchian_channels(&highs, &lows, &5_usize);
+    }
+
+    #[test]
+    #[should_panic]
+    fn bulk_donchian_channels_panic_period() {
+        let highs = vec![101.26, 102.57, 102.32, 100.69, 100.83, 101.73, 102.01];
+        let lows = vec![100.08, 98.75, 100.14, 98.98, 99.07, 100.1, 99.96];
+        bulk::donchian_channels(&highs, &lows, &50_usize);
+    }
+
+    #[test]
+    #[should_panic]
+    fn bulk_donchian_channels_panic_empty() {
+        let highs = Vec::new();
+        let lows = Vec::new();
+        bulk::donchian_channels(&highs, &lows, &5_usize);
+    }
+
+    #[test]
+    fn single_keltner_channel_ma() {
+        let highs = vec![101.26, 102.57, 102.32, 100.69, 100.83];
+        let lows = vec![100.08, 98.75, 100.14, 98.98, 99.07];
+        let close = vec![100.94, 101.27, 100.55, 99.01, 100.43];
+        assert_eq!((96.19933333333334, 100.45933333333333, 104.71933333333332), 
+            single::keltner_channel(
+                &highs,
+                &lows,
+                &close,
+                &crate::ConstantModelType::SimpleMovingAverage,
+                &crate::ConstantModelType::SimpleMovingAverage,
+                &2.0
+            ));
+    }
+
+    #[test]
+    fn single_keltner_channel_sma() {
+        let highs = vec![101.26, 102.57, 102.32, 100.69, 100.83];
+        let lows = vec![100.08, 98.75, 100.14, 98.98, 99.07];
+        let close = vec![100.94, 101.27, 100.55, 99.01, 100.43];
+        assert_eq!((96.08312708234176, 100.34312708234175, 104.60312708234174), 
+            single::keltner_channel(
+                &highs,
+                &lows,
+                &close,
+                &crate::ConstantModelType::SmoothedMovingAverage,
+                &crate::ConstantModelType::SimpleMovingAverage,
+                &2.0
+            ));
+    }
+
+    #[test]
+    fn single_keltner_channel_ema() {
+        let highs = vec![101.26, 102.57, 102.32, 100.69, 100.83];
+        let lows = vec![100.08, 98.75, 100.14, 98.98, 99.07];
+        let close = vec![100.94, 101.27, 100.55, 99.01, 100.43];
+        assert_eq!((95.99663507109007, 100.25663507109006, 104.51663507109005), 
+            single::keltner_channel(
+                &highs,
+                &lows,
+                &close,
+                &crate::ConstantModelType::ExponentialMovingAverage,
+                &crate::ConstantModelType::SimpleMovingAverage,
+                &2.0
+            ));
+    }
+
+    #[test]
+    fn single_keltner_channel_pma() {
+        let highs = vec![101.26, 102.57, 102.32, 100.69, 100.83];
+        let lows = vec![100.08, 98.75, 100.14, 98.98, 99.07];
+        let close = vec![100.94, 101.27, 100.55, 99.01, 100.43];
+        assert_eq!((95.86329426971132, 100.12329426971131, 104.3832942697113), 
+            single::keltner_channel(
+                &highs,
+                &lows,
+                &close,
+                &crate::ConstantModelType::PersonalisedMovingAverage(&5.0, &4.0),
+                &crate::ConstantModelType::SimpleMovingAverage,
+                &2.0
+            ));
+    }
+
+    #[test]
+    fn single_keltner_channel_median() {
+        let highs = vec![101.26, 102.57, 102.32, 100.69, 100.83];
+        let lows = vec![100.08, 98.75, 100.14, 98.98, 99.07];
+        let close = vec![100.94, 101.27, 100.55, 99.01, 100.43];
+        assert_eq!((96.5, 100.75999999999999, 105.01999999999998), 
+            single::keltner_channel(
+                &highs,
+                &lows,
+                &close,
+                &crate::ConstantModelType::SimpleMovingMedian,
+                &crate::ConstantModelType::SimpleMovingAverage,
+                &2.0
+            ));
+    }
+
+    #[test]
+    fn single_keltner_channel_mode() {
+        let highs = vec![101.26, 102.57, 102.32, 100.69, 100.83];
+        let lows = vec![100.08, 98.75, 100.14, 98.98, 99.07];
+        let close = vec![100.94, 101.27, 100.55, 99.01, 100.43];
+        assert_eq!((96.74000000000001, 101.0, 105.25999999999999), 
+            single::keltner_channel(
+                &highs,
+                &lows,
+                &close,
+                &crate::ConstantModelType::SimpleMovingMode,
+                &crate::ConstantModelType::SimpleMovingAverage,
+                &2.0
+            ));
+    }
+
+    #[test]
+    #[should_panic]
+    fn single_keltner_channel_panic_high_length() {
+        let highs = vec![101.26, 102.57, 102.32, 100.83];
+        let lows = vec![100.08, 98.75, 100.14, 98.98, 99.07];
+        let close = vec![100.94, 101.27, 100.55, 99.01, 100.43];
+        single::keltner_channel(
+            &highs,
+            &lows,
+            &close,
+            &crate::ConstantModelType::SimpleMovingMode,
+            &crate::ConstantModelType::SimpleMovingAverage,
+            &2.0
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn single_keltner_channel_panic_low_length() {
+        let highs = vec![101.26, 102.57, 102.32, 100.69, 100.83];
+        let lows = vec![100.08, 98.75, 100.14, 99.07];
+        let close = vec![100.94, 101.27, 100.55, 99.01, 100.43];
+        single::keltner_channel(
+            &highs,
+            &lows,
+            &close,
+            &crate::ConstantModelType::SimpleMovingMode,
+            &crate::ConstantModelType::SimpleMovingAverage,
+            &2.0
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn single_keltner_channel_panic_close_length() {
+        let highs = vec![101.26, 102.57, 102.32, 100.69, 100.83];
+        let lows = vec![100.08, 98.75, 100.14, 98.98, 99.07];
+        let close = vec![100.94, 101.27, 100.55, 100.43];
+        single::keltner_channel(
+            &highs,
+            &lows,
+            &close,
+            &crate::ConstantModelType::SimpleMovingMode,
+            &crate::ConstantModelType::SimpleMovingAverage,
+            &2.0
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn single_keltner_channel_panic_empty() {
+        let highs = Vec::new();
+        let lows = Vec::new();
+        let close = Vec::new();
+        single::keltner_channel(
+            &highs,
+            &lows,
+            &close,
+            &crate::ConstantModelType::SimpleMovingMode,
+            &crate::ConstantModelType::SimpleMovingAverage,
+            &2.0
+        );
+    }
+
+    #[test]
+    fn bulk_keltner_channel() {
+        let highs = vec![101.26, 102.57, 102.32, 100.69, 100.83, 101.73, 102.01];
+        let lows = vec![100.08, 98.75, 100.14, 98.98, 99.07, 100.1, 99.96];
+        let close = vec![100.94, 101.27, 100.55, 99.01, 100.43, 101.0, 101.76];
+        assert_eq!(
+            vec![
+                (95.99663507109007, 100.25663507109006, 104.51663507109005),
+                (96.05480252764615, 100.49480252764614, 104.93480252764614),
+                (97.03152290679306, 100.76352290679306, 104.49552290679306)
+            ], bulk::keltner_channel(
+                &highs,
+                &lows,
+                &close,
+                &crate::ConstantModelType::ExponentialMovingAverage,
+                &crate::ConstantModelType::SimpleMovingAverage,
+                &2.0,
+                &5_usize
+            ));
+    }
+
+    #[test]
+    #[should_panic]
+    fn bulk_keltner_channel_panic_high_length() {
+        let highs = vec![101.26, 102.57, 100.69, 100.83, 101.73, 102.01];
+        let lows = vec![100.08, 98.75, 100.14, 98.98, 99.07, 100.1, 99.96];
+        let close = vec![100.94, 101.27, 100.55, 99.01, 100.43, 101.0, 101.76];
+        bulk::keltner_channel(
+            &highs,
+            &lows,
+            &close,
+            &crate::ConstantModelType::ExponentialMovingAverage,
+            &crate::ConstantModelType::SimpleMovingAverage,
+            &2.0,
+            &5_usize
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn bulk_keltner_channel_panic_low_length() {
+        let highs = vec![101.26, 102.57, 102.32, 100.69, 100.83, 101.73, 102.01];
+        let lows = vec![100.08, 98.75, 100.14, 99.07, 100.1, 99.96];
+        let close = vec![100.94, 101.27, 100.55, 99.01, 100.43, 101.0, 101.76];
+        bulk::keltner_channel(
+                &highs,
+                &lows,
+                &close,
+                &crate::ConstantModelType::ExponentialMovingAverage,
+                &crate::ConstantModelType::SimpleMovingAverage,
+                &2.0,
+                &5_usize
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn bulk_keltner_channel_panic_close_length() {
+        let highs = vec![101.26, 102.57, 102.32, 100.69, 100.83, 101.73, 102.01];
+        let lows = vec![100.08, 98.75, 100.14, 98.98, 99.07, 100.1, 99.96];
+        let close = vec![100.94, 101.27, 99.01, 100.43, 101.0, 101.76];
+        bulk::keltner_channel(
+                &highs,
+                &lows,
+                &close,
+                &crate::ConstantModelType::ExponentialMovingAverage,
+                &crate::ConstantModelType::SimpleMovingAverage,
+                &2.0,
+                &5_usize
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn bulk_keltner_channel_panic_period() {
+        let highs = vec![101.26, 102.57, 102.32, 100.69, 100.83, 101.73, 102.01];
+        let lows = vec![100.08, 98.75, 100.14, 98.98, 99.07, 100.1, 99.96];
+        let close = vec![100.94, 101.27, 100.55, 99.01, 100.43, 101.0, 101.76];
+        bulk::keltner_channel(
+                &highs,
+                &lows,
+                &close,
+                &crate::ConstantModelType::ExponentialMovingAverage,
+                &crate::ConstantModelType::SimpleMovingAverage,
+                &2.0,
+                &50_usize
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn bulk_keltner_channel_panic_empty() {
+        let highs = Vec::new();
+        let lows = Vec::new();
+        let close = Vec::new();
+        bulk::keltner_channel(
+                &highs,
+                &lows,
+                &close,
+                &crate::ConstantModelType::ExponentialMovingAverage,
+                &crate::ConstantModelType::SimpleMovingAverage,
+                &2.0,
+                &5_usize
+        );
     }
 }
